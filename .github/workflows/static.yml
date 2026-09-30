@@ -1,91 +1,25 @@
-name: Sign iOS IPA File
-
 on:
   workflow_dispatch:
     inputs:
       apple_id:
-        description: 'Your Apple ID Email'
         required: true
       apple_password:
-        description: 'Your Apple ID App-Specific Password'
         required: true
-      ipa_url:
-        description: 'Direct download link to the unsigned .ipa file'
+      file_name:
+        required: true
+      ipa_base64:
+        description: 'The uploaded file payload encoded in text string'
         required: true
 
 jobs:
   sign_job:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository Code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up Python Environment
-      uses: actions/setup-python@v5
-      with:
-        python-numeric-version: '3.10'
-
-    - name: Install Network & Automation Tools
+    # Convert the file string back into a functional application binary 
+    - name: Reconstruct Uploaded Application File
       run: |
-        python -m pip install --upgrade pip
-        pip install requests
-        # Install an open-source tool like zsign for standalone Linux signing
-        sudo apt-get update
-        sudo apt-get install -y openssl libssl-dev
-        git clone https://github.com
-        cd zsign && g++ *.cpp -lcrypto -O3 -o zsign
-        sudo cp zsign /usr/local/bin/
-
-    - name: Fetch Anisette Headers and Run Automation
-      env:
-        APPLE_ID: ${{ github.event.inputs.apple_id }}
-        APPLE_PASSWORD: ${{ github.event.inputs.apple_password }}
-        IPA_URL: ${{ github.event.inputs.ipa_url }}
-      run: |
-        python3 - << 'EOF'
-        import os
-        import json
-        import requests
-
-        # Load the server list you provided
-        with open('servers.json', 'r') as f:
-            data = json.load(f)
-            servers = data.get('servers', [])
-
-        anisette_headers = None
-
-        # Cycle through servers until one works successfully
-        for server in servers:
-            url = f"{server['address']}/v3/get_headers"
-            print(f"Attempting connection to: {server['name']} ({url})")
-            try:
-                res = requests.get(url, timeout=5)
-                if res.status_code == 200:
-                    anisette_headers = res.json()
-                    print(f" Successfully retrieved headers from {server['name']}!")
-                    break
-            except Exception as e:
-                print(f"Skipping {server['name']}: Server unreachable.")
-
-        if not anisette_headers:
-            print("Error: All Anisette servers are offline or timed out.")
-            exit(1)
-
-        # Download the target IPA file
-        ipa_url = os.environ.get('IPA_URL')
-        print(f"Downloading application payload from: {ipa_url}")
-        ipa_res = requests.get(ipa_url)
-        with open("app.ipa", "wb") as f:
-            f.write(ipa_res.content)
-
-        # Placeholder: This is where your code signing utility logic (like zsign) 
-        # utilizes the fetched parameters and credentials to sign app.ipa
-        print("[WORKFLOW] Ready to compile and package. Proceeding with signing engine execution...")
-        EOF
-
-    - name: Upload Signed App Package as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Signed-Application
-        path: app.ipa
+        echo "${{ github.event.inputs.ipa_base64 }}" | base64 --decode > input_app.ipa
+        echo "Successfully unpacked: ${{ github.event.inputs.file_name }}"
